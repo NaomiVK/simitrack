@@ -1,0 +1,158 @@
+<div class="container">
+  <header class="header">
+    <h1>SimiTrack</h1>
+    <p class="subtitle">Content Similarity Analysis</p>
+  </header>
+
+  <!-- Input Section -->
+  <section class="input-section">
+    <label for="urls">Enter URLs (one per line):</label>
+    <textarea
+      id="urls"
+      [ngModel]="urlInput()"
+      (ngModelChange)="urlInput.set($event)"
+      placeholder="https://example.com/page1&#10;https://example.com/page2&#10;https://example.com/page3"
+      rows="6"
+    ></textarea>
+    <div class="button-group">
+      <button class="btn btn-primary" (click)="analyze()" [disabled]="loading()">
+        @if (loading()) {
+          <span class="spinner"></span> Analyzing...
+        } @else {
+          Analyze URLs
+        }
+      </button>
+      <button class="btn btn-secondary" (click)="loadExample()">
+        Load Example
+      </button>
+      <button class="btn btn-outline" (click)="clear()">Clear</button>
+    </div>
+  </section>
+
+  <!-- Error Message -->
+  @if (error()) {
+    <div class="error-message">
+      {{ error() }}
+    </div>
+  }
+
+  <!-- Results Section -->
+  @if (result()) {
+    <section class="results-section">
+      <!-- Summary Cards -->
+      <div class="summary-cards">
+        <div class="card card-info">
+          <div class="card-value">{{ result()!.pages_analyzed }}</div>
+          <div class="card-label">Pages Analyzed</div>
+        </div>
+        <div class="card card-critical">
+          <div class="card-value">{{ duplicates().length }}</div>
+          <div class="card-label">Duplicates</div>
+        </div>
+        <div class="card card-medium">
+          <div class="card-value">{{ collisions().length }}</div>
+          <div class="card-label">Intent Collisions</div>
+        </div>
+        <div class="card card-low">
+          <div class="card-value">{{ templateOverlaps().length }}</div>
+          <div class="card-label">Template Overlaps</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'relationships'"
+          (click)="activeTab.set('relationships')"
+        >
+          Relationships ({{ relationships().length }})
+        </button>
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'clusters'"
+          (click)="activeTab.set('clusters')"
+        >
+          Intent Clusters ({{ clusters().length }})
+        </button>
+      </div>
+
+      <!-- Relationships Table -->
+      @if (activeTab() === 'relationships') {
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>URL A</th>
+                <th>URL B</th>
+                <th>Classification</th>
+                <th>Confidence</th>
+                <th>Similarity</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (rel of relationships(); track rel.url_a + rel.url_b) {
+                <tr>
+                  <td class="url-cell" [title]="rel.url_a">
+                    <a [href]="rel.url_a" target="_blank">{{ truncateUrl(rel.url_a) }}</a>
+                  </td>
+                  <td class="url-cell" [title]="rel.url_b">
+                    <a [href]="rel.url_b" target="_blank">{{ truncateUrl(rel.url_b) }}</a>
+                  </td>
+                  <td>
+                    <span class="badge" [class]="getClassificationClass(rel.classification)">
+                      {{ rel.classification }}
+                    </span>
+                  </td>
+                  <td>{{ rel.confidence }}%</td>
+                  <td class="similarity-cell">
+                    <div class="similarity-grid">
+                      <span title="Title">T: {{ (rel.similarity_summary.title * 100).toFixed(0) }}%</span>
+                      <span title="Intro">I: {{ (rel.similarity_summary.intro * 100).toFixed(0) }}%</span>
+                      <span title="Body">B: {{ (rel.similarity_summary.body * 100).toFixed(0) }}%</span>
+                      <span title="Full">F: {{ (rel.similarity_summary.full * 100).toFixed(0) }}%</span>
+                    </div>
+                  </td>
+                  <td class="action-cell">{{ rel.recommended_action }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- Intent Clusters -->
+      @if (activeTab() === 'clusters') {
+        @if (clusters().length === 0) {
+          <div class="empty-state">
+            <p>No intent collision clusters detected.</p>
+          </div>
+        } @else {
+          <div class="clusters-grid">
+            @for (cluster of clusters(); track cluster.primary_url) {
+              <div class="cluster-card">
+                <h3>Cluster ({{ cluster.cluster_urls.length + 1 }} URLs)</h3>
+                <div class="cluster-urls">
+                  <div class="primary-url">
+                    <span class="label">Primary:</span>
+                    <a [href]="cluster.primary_url" target="_blank">
+                      {{ truncateUrl(cluster.primary_url, 80) }}
+                    </a>
+                  </div>
+                  @for (url of cluster.cluster_urls; track url) {
+                    <div class="related-url">
+                      <span class="label">Related:</span>
+                      <a [href]="url" target="_blank">{{ truncateUrl(url, 80) }}</a>
+                    </div>
+                  }
+                </div>
+                <p class="reasoning">{{ cluster.reasoning }}</p>
+              </div>
+            }
+          </div>
+        }
+      }
+    </section>
+  }
+</div>
