@@ -29,6 +29,7 @@ export type SimilarityClassification =
   | 'Definite Duplicate'
   | 'Near Duplicate'
   | 'Intent Collision'
+  | 'Potential Cannibalization'
   | 'Template Overlap'
   | 'Unique';
 

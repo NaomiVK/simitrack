@@ -166,6 +166,11 @@
   .card-value { color: #ef6c00; }
 }
 
+.card-warning {
+  background: #fff8e1;
+  .card-value { color: #ff8f00; }
+}
+
 .card-low {
   background: #e8f5e9;
   .card-value { color: #2e7d32; }
@@ -259,6 +264,11 @@
 .badge-medium {
   background: #fff3e0;
   color: #ef6c00;
+}
+
+.badge-warning {
+  background: #fff8e1;
+  color: #ff8f00;
 }
 
 .badge-low {

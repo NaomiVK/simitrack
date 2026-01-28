@@ -11,6 +11,15 @@ import {
   SimilarityClassification,
 } from '@simitrack/shared-types';
 
+// Similarity thresholds calibrated for text-embedding-3-large
+const THRESHOLDS = {
+  definiteDuplicate: { body: 0.92, title: 0.88 },
+  nearDuplicate: { body: 0.85, intro: 0.80 },
+  intentCollision: { title: 0.82, bodyMax: 0.75 },
+  potentialCannibalization: { title: 0.75, bodyMin: 0.60, bodyMax: 0.80 },
+  templateOverlap: { full: 0.88, bodyMax: 0.70 },
+};
+
 @Injectable()
 export class ContentSimilarityService {
   private readonly logger = new Logger(ContentSimilarityService.name);
@@ -44,7 +53,7 @@ Use Google Search to find and analyze this page's content.`;
 
     try {
       const response = await client.models.generateContent({
-        model: 'gemini-2.5-flash-preview-05-20',
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -75,17 +84,30 @@ Use Google Search to find and analyze this page's content.`;
   }
 
   async fetchMultiplePages(urls: string[]): Promise<ContentPage[]> {
-    const pages: ContentPage[] = [];
+    const CONCURRENCY = 10; // Process 10 URLs at a time
+    const results: ContentPage[] = [];
 
-    for (const url of urls) {
-      this.logger.log(`Fetching content from: ${url}`);
-      const page = await this.fetchPageContent(url);
-      pages.push(page);
-      // Rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 200));
+    // Process in batches for rate limiting
+    for (let i = 0; i < urls.length; i += CONCURRENCY) {
+      const batch = urls.slice(i, i + CONCURRENCY);
+      this.logger.log(`Fetching batch ${Math.floor(i / CONCURRENCY) + 1}: ${batch.length} URLs`);
+
+      const batchResults = await Promise.all(
+        batch.map(url => {
+          this.logger.log(`Fetching content from: ${url}`);
+          return this.fetchPageContent(url);
+        })
+      );
+
+      results.push(...batchResults);
+
+      // Small delay between batches to avoid rate limiting
+      if (i + CONCURRENCY < urls.length) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
 
-    return pages;
+    return results;
   }
 
   async generateEmbeddings(pages: ContentPage[]): Promise<ContentPage[]> {
@@ -164,7 +186,19 @@ Use Google Search to find and analyze this page's content.`;
       let recommended_action: string;
       let reasoning: string;
 
-      if (score.body_similarity >= 0.95 && score.title_similarity >= 0.9) {
+      // Debug logging for similarity scores
+      this.logger.debug(
+        `Similarity scores for ${score.url_a} vs ${score.url_b}: ` +
+        `title=${(score.title_similarity * 100).toFixed(1)}%, ` +
+        `intro=${(score.intro_similarity * 100).toFixed(1)}%, ` +
+        `body=${(score.body_similarity * 100).toFixed(1)}%, ` +
+        `full=${(score.full_similarity * 100).toFixed(1)}%`
+      );
+
+      if (
+        score.body_similarity >= THRESHOLDS.definiteDuplicate.body &&
+        score.title_similarity >= THRESHOLDS.definiteDuplicate.title
+      ) {
         classification = 'Definite Duplicate';
         confidence = Math.round(
           ((score.body_similarity + score.title_similarity) / 2) * 100
@@ -172,8 +206,8 @@ Use Google Search to find and analyze this page's content.`;
         recommended_action = 'Canonicalize, redirect, or remove one URL';
         reasoning = `Very high body (${(score.body_similarity * 100).toFixed(1)}%) and title (${(score.title_similarity * 100).toFixed(1)}%) similarity indicates duplicate content.`;
       } else if (
-        score.body_similarity >= 0.9 &&
-        score.intro_similarity >= 0.85
+        score.body_similarity >= THRESHOLDS.nearDuplicate.body &&
+        score.intro_similarity >= THRESHOLDS.nearDuplicate.intro
       ) {
         classification = 'Near Duplicate';
         confidence = Math.round(
@@ -182,16 +216,27 @@ Use Google Search to find and analyze this page's content.`;
         recommended_action = 'Merge content or rewrite to differentiate';
         reasoning = `High body (${(score.body_similarity * 100).toFixed(1)}%) and intro (${(score.intro_similarity * 100).toFixed(1)}%) similarity suggests near-duplicate content.`;
       } else if (
-        score.title_similarity >= 0.85 &&
-        score.body_similarity < 0.8
+        score.title_similarity >= THRESHOLDS.intentCollision.title &&
+        score.body_similarity < THRESHOLDS.intentCollision.bodyMax
       ) {
         classification = 'Intent Collision';
         confidence = Math.round(score.title_similarity * 100);
         recommended_action = 'Clarify intent and differentiate focus';
         reasoning = `Similar titles (${(score.title_similarity * 100).toFixed(1)}%) but different body content (${(score.body_similarity * 100).toFixed(1)}%) indicates SEO intent collision.`;
       } else if (
-        score.full_similarity >= 0.9 &&
-        score.body_similarity < 0.75
+        score.title_similarity >= THRESHOLDS.potentialCannibalization.title &&
+        score.body_similarity >= THRESHOLDS.potentialCannibalization.bodyMin &&
+        score.body_similarity < THRESHOLDS.potentialCannibalization.bodyMax
+      ) {
+        classification = 'Potential Cannibalization';
+        confidence = Math.round(
+          ((score.title_similarity + score.body_similarity) / 2) * 100
+        );
+        recommended_action = 'Review for keyword cannibalization - consider consolidating or differentiating';
+        reasoning = `Moderate title (${(score.title_similarity * 100).toFixed(1)}%) and body (${(score.body_similarity * 100).toFixed(1)}%) similarity suggests these pages may compete for similar keywords.`;
+      } else if (
+        score.full_similarity >= THRESHOLDS.templateOverlap.full &&
+        score.body_similarity < THRESHOLDS.templateOverlap.bodyMax
       ) {
         classification = 'Template Overlap';
         confidence = Math.round(score.full_similarity * 100);
@@ -203,6 +248,11 @@ Use Google Search to find and analyze this page's content.`;
         recommended_action = 'No action needed';
         reasoning = 'Content is sufficiently different.';
       }
+
+      // Log classification decision
+      this.logger.log(
+        `Classified ${score.url_a} vs ${score.url_b} as "${classification}" (confidence: ${confidence}%)`
+      );
 
       return {
         url_a: score.url_a,

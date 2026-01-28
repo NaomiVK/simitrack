@@ -2,7 +2,13 @@
   "name": "@simitrack/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "build:api": "nx build api --configuration=production --skip-nx-cache",
+    "build:frontend": "nx build frontend --configuration=production --skip-nx-cache",
+    "build:all": "nx run-many -t build --configuration=production --skip-nx-cache",
+    "serve:api": "nx serve api",
+    "serve:frontend": "nx serve frontend"
+  },
   "private": true,
   "dependencies": {
     "@angular/common": "~21.0.0",

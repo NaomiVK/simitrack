@@ -28,10 +28,12 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_id   = "API-EC2"
 
     custom_origin_config {
-      http_port              = var.api_port
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
+      http_port                = var.api_port
+      https_port               = 443
+      origin_protocol_policy   = "http-only"
+      origin_ssl_protocols     = ["TLSv1.2"]
+      origin_read_timeout      = 60  # Max allowed (default 30)
+      origin_keepalive_timeout = 60  # Max allowed (default 5)
     }
   }
 

@@ -37,6 +37,9 @@ export class ContentSimilarityComponent {
   collisions = computed(() =>
     this.relationships().filter((r) => r.classification === 'Intent Collision')
   );
+  cannibalization = computed(() =>
+    this.relationships().filter((r) => r.classification === 'Potential Cannibalization')
+  );
   templateOverlaps = computed(() =>
     this.relationships().filter((r) => r.classification === 'Template Overlap')
   );
@@ -97,6 +100,8 @@ https://www.canada.ca/en/services/taxes/child-and-family-benefits.html`);
         return 'badge-high';
       case 'Intent Collision':
         return 'badge-medium';
+      case 'Potential Cannibalization':
+        return 'badge-warning';
       case 'Template Overlap':
         return 'badge-low';
       default:
